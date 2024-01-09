@@ -39,6 +39,30 @@ def transform_dataset(spark, stock_data_pd):
     return stock_data_spark
 
 
+#visualize the volume from start_day to end_day
+def visualize_volume(stock_data_spark):
+    visualize_data = stock_data_spark.select("Date", "Volume").toPandas()
+    fig, ax = plt.subplots()
+    ax.plot(visualize_data["Date"], visualize_data["Volume"], label="Volume")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Volume")
+    ax.set_title("Volume Over Time")
+    ax.legend()
+    st.pyplot(fig)
+
+
+#visualize the close price from start_day to end_day
+def visualize_close_price(stock_data_spark):
+    visualize_data = stock_data_spark.select("Date", "Close").toPandas()
+    fig, ax = plt.subplots()
+    ax.plot(visualize_data["Date"], visualize_data["Close"], label="Close Price")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Close Price")
+    ax.set_title("Close Price Over Time")
+    ax.legend()
+    st.pyplot(fig)
+
+
 # split the dataset to train_dataset and test_dataset
 def split_dataset(stock_data_spark, split_date):
     train_data = stock_data_spark.filter(col("date") <= split_date)
@@ -106,6 +130,10 @@ def main():
     stock_data_pd = get_stock_data(symbol, start_date, end_date)
     if stock_data_pd is not None:
         stock_data_spark = transform_dataset(spark, stock_data_pd)
+        st.subheader("Visualize Dataset")
+        visualize_volume(stock_data_spark)
+        visualize_close_price(stock_data_spark)
+
         split_date = st.text_input("Enter Split Date (YYYY-MM-DD):", "2021-12-31")
         train_data ,test_data= split_dataset(stock_data_spark, split_date) 
         feature_columns = ["yesterday_volume", "yesterday_close"]
