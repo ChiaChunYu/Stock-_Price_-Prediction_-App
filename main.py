@@ -11,6 +11,7 @@ import yfinance as yf
 import streamlit as st
 import pandas as pd
 
+
 # get the stock data by yfinance
 def get_stock_data(symbol, start_date, end_date):
     try:
@@ -25,16 +26,24 @@ def get_stock_data(symbol, start_date, end_date):
         st.error(f"An error occurred while fetching stock data: {str(e)}")
         return None
 
+
 # to transform the dataset to spark dataset 
 def transform_dataset(spark, stock_data_pd):
     stock_data_spark = spark.createDataFrame(stock_data_pd)
     stock_data_spark = stock_data_spark.withColumn("date", to_date(stock_data_spark["Date"], 'yyyy-MM-dd'))
     stock_data_spark = stock_data_spark.orderBy("date")
     window_spec = Window().orderBy("date")
-    stock_data_spark = stock_data_spark.withColumn("lagged_volume", lag("Volume").over(window_spec)).na.drop()
-    stock_data_spark = stock_data_spark.withColumn("lagged_close", lag("Close").over(window_spec)).na.drop()
+    stock_data_spark = stock_data_spark.withColumn("yesterday_volume", lag("Volume").over(window_spec)).na.drop()
+    stock_data_spark = stock_data_spark.withColumn("yesterday_close", lag("Close").over(window_spec)).na.drop()
     stock_data_spark = stock_data_spark.dropna()
     return stock_data_spark
+
+
+# split the dataset to train_dataset and test_dataset
+def split_dataset(stock_data_spark, split_date):
+    train_data = stock_data_spark.filter(col("date") <= split_date)
+    test_data = stock_data_spark.filter(col("date") > split_date)
+    return train_data ,test_data
 
 
 # bulid the linear regression model
@@ -72,19 +81,12 @@ def visualize_predictions(predictions):
     st.pyplot(fig)
 
 
-# split the dataset to train_dataset and test_dataset
-def split_dataset(stock_data_spark, split_date):
-    train_data = stock_data_spark.filter(col("date") <= split_date)
-    test_data = stock_data_spark.filter(col("date") > split_date)
-    return train_data ,test_data
-
-
 # input the volume and close price to predit the close price in the next day
 def predict_next_day_value(model, spark):
     st.subheader("Predict Next Day's Close Price")
     user_volume = st.number_input("Enter Volume:", min_value=0.0)
     user_close = st.number_input("Enter Close Price:", min_value=0.0)
-    user_data = pd.DataFrame({"lagged_volume": [user_volume], "lagged_close": [user_close]})
+    user_data = pd.DataFrame({"yesterday_volume": [user_volume], "yesterday_close": [user_close]})
     user_spark_data = spark.createDataFrame(user_data)
     user_predictions = model.transform(user_spark_data)
     predicted_close = user_predictions.select("prediction").collect()[0]["prediction"]
@@ -106,7 +108,7 @@ def main():
         stock_data_spark = transform_dataset(spark, stock_data_pd)
         split_date = st.text_input("Enter Split Date (YYYY-MM-DD):", "2021-12-31")
         train_data ,test_data= split_dataset(stock_data_spark, split_date) 
-        feature_columns = ["lagged_volume", "lagged_close"]
+        feature_columns = ["yesterday_volume", "yesterday_close"]
         model = bulid_model(feature_columns, train_data)
         predictions = model.transform(test_data)
 
